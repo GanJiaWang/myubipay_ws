@@ -33,8 +33,6 @@ type Database struct {
 var DB *Database
 
 func ConnectMongoDB(cfg *config.Config) (*Database, error) {
-	log.Printf("🔗 Connecting to MongoDB URI: %s, DB: %s\n", cfg.MongoDBURI, cfg.MongoDBName)
-
 	// Connect to MongoDB
 	clientOptions := options.Client().ApplyURI(cfg.MongoDBURI)
 

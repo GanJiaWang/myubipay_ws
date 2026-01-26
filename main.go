@@ -7,8 +7,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
-
 	"go-ubipay-websocket/config"
 	"go-ubipay-websocket/cron"
 	"go-ubipay-websocket/database"
@@ -20,11 +18,6 @@ import (
 )
 
 func main() {
-	// 1️⃣ 调用 godotenv.Load() 读取 .env 文件
-	if err := godotenv.Load(); err != nil {
-		log.Println("⚠️ .env file not found, using defaults or system env")
-	}
-
 	// Load configuration
 	cfg := config.LoadConfig()
 	log.Println("🚀 Starting Real-Time Point Mining System (MVP)")

@@ -1,9 +1,12 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -17,7 +20,16 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found, using environment variables")
+	}
+
 	return &Config{
+		// ServerPort:        getEnv("SERVER_PORT", "3000"),
+		// MongoDBURI:        os.Getenv("MONGODB_URI"),
+		// MongoDBName:       os.Getenv("MONGODB_NAME"),
+		// JWTSecret:         os.Getenv("JWT_SECRET"),
 		ServerPort:        getEnv("SERVER_PORT", "3124"),
 		MongoDBURI:        getEnv("MONGODB_URI", "mongodb://localhost:27017"),
 		MongoDBName:       getEnv("MONGODB_NAME", "ubipay"),
