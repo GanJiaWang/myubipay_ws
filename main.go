@@ -7,6 +7,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	"go-ubipay-websocket/config"
 	"go-ubipay-websocket/cron"
 	"go-ubipay-websocket/database"
@@ -15,10 +17,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	fiberwebsocket "github.com/gofiber/websocket/v2"
-
 )
 
 func main() {
+	// 1️⃣ 调用 godotenv.Load() 读取 .env 文件
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️ .env file not found, using defaults or system env")
+	}
+
 	// Load configuration
 	cfg := config.LoadConfig()
 	log.Println("🚀 Starting Real-Time Point Mining System (MVP)")
@@ -69,8 +75,6 @@ func main() {
 		return fiberwebsocket.New(wsHandler.WebSocketConnection)(c)
 	})
 
-
-
 	// Manual accrual trigger endpoint (for testing)
 	app.Post("/admin/accrual/run", func(c *fiber.Ctx) error {
 		accrualJob.RunManualAccrual()
@@ -84,15 +88,15 @@ func main() {
 	app.Get("/admin/sessions", func(c *fiber.Ctx) error {
 		activeSessions := sessionManager.GetActiveSessions()
 		sessionInfo := make([]fiber.Map, len(activeSessions))
-		
+
 		for i, session := range activeSessions {
 			sessionInfo[i] = fiber.Map{
-				"user_id":       session.UserID.Hex(),
-				"username":      session.Username,
-				"connected_at":  session.ConnectedAt,
-				"last_accrual":  session.LastAccrualAt,
+				"user_id":        session.UserID.Hex(),
+				"username":       session.Username,
+				"connected_at":   session.ConnectedAt,
+				"last_accrual":   session.LastAccrualAt,
 				"last_heartbeat": session.LastHeartbeat,
-				"is_active":     session.IsActive,
+				"is_active":      session.IsActive,
 			}
 		}
 

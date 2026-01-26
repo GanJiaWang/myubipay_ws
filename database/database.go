@@ -17,22 +17,24 @@ import (
 )
 
 var (
-    ErrUserNotFound = errors.New("user not found")
+	ErrUserNotFound = errors.New("user not found")
 )
 
 type Database struct {
-	Client                 *mongo.Client
-	UserWalletCollection   *mongo.Collection
-	TransactionCollection  *mongo.Collection
-	TestMode               bool
-	User                   *mongo.Collection
-	mockWallets            map[primitive.ObjectID]*models.UserWallet
-	mockTransactions       []*models.TransactionMovement
+	Client                *mongo.Client
+	UserWalletCollection  *mongo.Collection
+	TransactionCollection *mongo.Collection
+	TestMode              bool
+	User                  *mongo.Collection
+	mockWallets           map[primitive.ObjectID]*models.UserWallet
+	mockTransactions      []*models.TransactionMovement
 }
 
 var DB *Database
 
 func ConnectMongoDB(cfg *config.Config) (*Database, error) {
+	log.Printf("🔗 Connecting to MongoDB URI: %s, DB: %s\n", cfg.MongoDBURI, cfg.MongoDBName)
+
 	// Connect to MongoDB
 	clientOptions := options.Client().ApplyURI(cfg.MongoDBURI)
 
@@ -55,11 +57,11 @@ func ConnectMongoDB(cfg *config.Config) (*Database, error) {
 	db := client.Database(cfg.MongoDBName)
 
 	database := &Database{
-		Client:                 client,
-		UserWalletCollection:   db.Collection("TblUserWallet"),
-		TransactionCollection:  db.Collection("TblTransactionMovement"),
-		User:                   db.Collection("TblUser"),
-		TestMode:               false,
+		Client:                client,
+		UserWalletCollection:  db.Collection("TblUserWallet"),
+		TransactionCollection: db.Collection("TblTransactionMovement"),
+		User:                  db.Collection("TblUser"),
+		TestMode:              false,
 	}
 
 	DB = database
@@ -112,7 +114,7 @@ func (db *Database) GetUserWallet(userID primitive.ObjectID) (*models.UserWallet
 	return &wallet, nil
 }
 
-func (db *Database) GetUserBySessionToken (sessionToken string) (*models.User, error) {
+func (db *Database) GetUserBySessionToken(sessionToken string) (*models.User, error) {
 	// Check if User collection is available (test mode or not initialized)
 	if db.User == nil {
 		return nil, fmt.Errorf("user collection not available")
@@ -196,9 +198,9 @@ func (db *Database) UpdateWalletBalance(userID primitive.ObjectID, amount int) (
 
 	update := bson.M{
 		"$set": bson.M{
-			"Balance":       newBalance,
-			"ModifiedBy":    "API",
-			"ModifiedDate":  time.Now(),
+			"Balance":      newBalance,
+			"ModifiedBy":   "API",
+			"ModifiedDate": time.Now(),
 		},
 	}
 
@@ -216,19 +218,19 @@ func (db *Database) UpdateWalletBalance(userID primitive.ObjectID, amount int) (
 
 func (db *Database) CreateTransaction(userID primitive.ObjectID, username string, transactionType, targetType, amount, beforeAmt, afterAmt int) error {
 	transaction := models.TransactionMovement{
-		ID:             primitive.NewObjectID(),
-		UserID:         userID,
-		Username:       username,
+		ID:              primitive.NewObjectID(),
+		UserID:          userID,
+		Username:        username,
 		TransactionType: transactionType,
-		TargetType:     targetType,
-		Amount:         amount,
-		BeforeAmt:      beforeAmt,
-		AfterAmt:       afterAmt,
-		Enable:         true,
-		CreateBy:       "System",
-		CreateDate:     time.Now(),
-		ModifiedBy:     "",
-		ModifiedDate:   time.Time{},
+		TargetType:      targetType,
+		Amount:          amount,
+		BeforeAmt:       beforeAmt,
+		AfterAmt:        afterAmt,
+		Enable:          true,
+		CreateBy:        "System",
+		CreateDate:      time.Now(),
+		ModifiedBy:      "",
+		ModifiedDate:    time.Time{},
 	}
 
 	if db.TestMode {

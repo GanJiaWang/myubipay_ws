@@ -58,7 +58,7 @@ func (h *WebSocketHandler) WebSocketConnection(c *websocket.Conn) {
 	token := c.Query("token")
 	var userID primitive.ObjectID
 	var username string
-	fmt.Println("token:",token)
+	fmt.Println("token:", token)
 
 	if token != "" {
 		// Validate JWT token
@@ -142,6 +142,21 @@ func (h *WebSocketHandler) handleMessage(session *Session, msg []byte) {
 	if err := json.Unmarshal(msg, &wsMsg); err != nil {
 		log.Printf("❌ Failed to parse WebSocket message from user %s: %v", session.Username, err)
 		return
+	}
+
+	// ===== 兼容处理 auth 消息 =====
+	if wsMsg.Type == "auth" {
+		// 如果 payload 是 nil，尝试直接从根对象取 token
+		if wsMsg.Payload == nil {
+			var root map[string]interface{}
+			if err := json.Unmarshal(msg, &root); err == nil {
+				if token, ok := root["token"].(string); ok && token != "" {
+					wsMsg.Payload = map[string]interface{}{
+						"token": token,
+					}
+				}
+			}
+		}
 	}
 
 	switch wsMsg.Type {
@@ -232,6 +247,8 @@ func (h *WebSocketHandler) validateSessionToken(sessionToken string) (primitive.
 
 func (h *WebSocketHandler) handleAuthMessage(session *Session, payload interface{}) {
 	// Extract token from payload
+	fmt.Printf("DEBUG payload type: %T, value: %#v\n", payload, payload)
+
 	payloadMap, ok := payload.(map[string]interface{})
 	if !ok {
 		session.Conn.WriteJSON(WSMessage{
