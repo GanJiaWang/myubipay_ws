@@ -8,7 +8,11 @@ import (
 	"go-ubipay-websocket/database"
 	"go-ubipay-websocket/websocket"
 
+	"strconv"
+	"strings"
+
 	"github.com/robfig/cron/v3"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AccrualJob struct {
@@ -45,11 +49,20 @@ func (j *AccrualJob) Stop() {
 	log.Println("🛑 Accrual cron job stopped")
 }
 
+func Decimal128ToInt(d primitive.Decimal128) int {
+	s := d.String()              // 例如 "3.0"
+	s = strings.Split(s, ".")[0] // 只取整数部分
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return i
+}
+
 func (j *AccrualJob) runAccrual() {
 	startTime := time.Now()
 	log.Printf("⏰ Starting accrual process at %s", startTime.Format("2006-01-02 15:04:05"))
 
-	// Get all active sessions
 	activeSessions := j.sessionManager.GetActiveSessions()
 	log.Printf("📊 Found %d active sessions", len(activeSessions))
 
@@ -66,10 +79,9 @@ func (j *AccrualJob) runAccrual() {
 			continue
 		}
 
-		// Calculate points to award (1 point per minute by default)
 		pointsToAward := j.cfg.PointsPerMinute
 
-		// Accrue points for this user
+		// 给用户加积分
 		err := j.db.AccruePoints(session.UserID, session.Username, pointsToAward)
 		if err != nil {
 			log.Printf("❌ Failed to accrue points for user %s: %v", session.Username, err)
@@ -77,29 +89,29 @@ func (j *AccrualJob) runAccrual() {
 			continue
 		}
 
-		// Update last accrual time
 		j.sessionManager.UpdateLastAccrual(session.UserID)
 
-		// Get updated balance to send notification
-		wallet, err := j.db.GetUserWallet(session.UserID)
-		if err != nil {
-			log.Printf("⚠️ Failed to get updated balance for user %s: %v", session.Username, err)
-		} else {
-			// Send real-time accrual notification via WebSocket
-			wsSession, exists := j.sessionManager.GetSession(session.UserID)
-			if exists && wsSession.IsActive {
-				j.wsHandler.SendAccrualNotification(wsSession, pointsToAward, wallet.Balance)
-			}
-			log.Printf("💰 Accrued %d points for user %s, new balance: %d", 
-				pointsToAward, session.Username, wallet.Balance)
+		// 获取最新钱包余额
+		wallet, _ := j.db.GetUserWallet(session.UserID)
+		if wallet == nil {
+			log.Printf("⚠️ Failed to get updated balance for user %s", session.Username)
+			continue
 		}
 
+		balance := Decimal128ToInt(wallet.Balance)
+
+		// WebSocket 通知
+		wsSession, exists := j.sessionManager.GetSession(session.UserID)
+		if exists && wsSession.IsActive {
+			j.wsHandler.SendAccrualNotification(wsSession, pointsToAward, balance)
+		}
+
+		log.Printf("💰 Accrued %d points for user %s, new balance: %d", pointsToAward, session.Username, balance)
 		successCount++
 	}
 
 	duration := time.Since(startTime)
-	log.Printf("✅ Accrual process completed in %v - Success: %d, Failures: %d", 
-		duration, successCount, failureCount)
+	log.Printf("✅ Accrual process completed in %v - Success: %d, Failures: %d", duration, successCount, failureCount)
 }
 
 func (j *AccrualJob) RunManualAccrual() {
