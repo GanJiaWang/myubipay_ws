@@ -10,6 +10,9 @@ import (
 	"go-ubipay-websocket/config"
 	"go-ubipay-websocket/models"
 
+	"strconv"
+	"strings"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -135,13 +138,27 @@ func (db *Database) GetUserBySessionToken(sessionToken string) (*models.User, er
 	return &user, nil
 }
 
+// Decimal128 → int
+func decimal128ToInt(d primitive.Decimal128) int {
+	s := d.String() // "3.0"
+	s = strings.Split(s, ".")[0]
+	i, _ := strconv.Atoi(s)
+	return i
+}
+
+// int → Decimal128
+func intToDecimal128(i int) primitive.Decimal128 {
+	d, _ := primitive.ParseDecimal128(strconv.Itoa(i))
+	return d
+}
+
 func (db *Database) CreateUserWallet(userID primitive.ObjectID) (*models.UserWallet, error) {
 	wallet := models.UserWallet{
 		ID:           primitive.NewObjectID(),
 		UserID:       userID,
 		WalletType:   1,
 		WalletName:   "Point Wallet",
-		Balance:      0,
+		Balance:      intToDecimal128(0),
 		Enable:       true,
 		CreateBy:     "System",
 		CreateDate:   time.Now(),
@@ -175,19 +192,20 @@ func (db *Database) UpdateWalletBalance(userID primitive.ObjectID, amount int) (
 		return nil, err
 	}
 
-	newBalance := wallet.Balance + amount
+	current := decimal128ToInt(wallet.Balance)
+	newBalance := current + amount
 	if newBalance < 0 {
 		return nil, fmt.Errorf("insufficient balance")
 	}
 
+	wallet.Balance = intToDecimal128(newBalance)
+	wallet.ModifiedBy = "API"
+	wallet.ModifiedDate = time.Now()
+
 	if db.TestMode {
-		// Mock implementation for test mode
-		wallet.Balance = newBalance
-		wallet.ModifiedBy = "API"
-		wallet.ModifiedDate = time.Now()
 		db.mockWallets[userID] = wallet
-		log.Printf("💵 [TEST] Updated wallet balance for user %s: Amount: %d, New Balance: %d",
-			userID.Hex(), amount, newBalance)
+		log.Printf("💵 [TEST] Updated wallet balance for user %s: %+d → %+d",
+			userID.Hex(), current, newBalance)
 		return wallet, nil
 	}
 
@@ -196,21 +214,20 @@ func (db *Database) UpdateWalletBalance(userID primitive.ObjectID, amount int) (
 
 	update := bson.M{
 		"$set": bson.M{
-			"Balance":      newBalance,
-			"ModifiedBy":   "API",
-			"ModifiedDate": time.Now(),
+			"Balance":      wallet.Balance,
+			"ModifiedBy":   wallet.ModifiedBy,
+			"ModifiedDate": wallet.ModifiedDate,
 		},
 	}
 
-	filter := bson.M{"_id": wallet.ID}
-	_, err = db.UserWalletCollection.UpdateOne(ctx, filter, update)
+	_, err = db.UserWalletCollection.UpdateOne(ctx, bson.M{"_id": wallet.ID}, update)
 	if err != nil {
 		return nil, err
 	}
 
-	wallet.Balance = newBalance
-	log.Printf("💵 Updated wallet balance for user %s: Amount: %d, New Balance: %d",
-		userID.Hex(), amount, newBalance)
+	log.Printf("💵 Updated wallet balance for user %s: %+d → %+d",
+		userID.Hex(), current, newBalance)
+
 	return wallet, nil
 }
 
@@ -259,7 +276,8 @@ func (db *Database) AccruePoints(userID primitive.ObjectID, username string, poi
 		return err
 	}
 
-	beforeAmt := wallet.Balance
+	beforeAmt := decimal128ToInt(wallet.Balance)
+
 	_, err = db.UpdateWalletBalance(userID, points)
 	if err != nil {
 		return err
@@ -274,5 +292,14 @@ func (db *Database) AccruePoints(userID primitive.ObjectID, username string, poi
 	} else {
 		log.Printf("💰 Awarded %d points to user %s (%s)", points, username, userID.Hex())
 	}
-	return db.CreateTransaction(userID, username, 2, 1, points, beforeAmt, afterAmt)
+	return db.CreateTransaction(
+		userID,
+		username,
+		2,
+		1,
+		points,
+		beforeAmt,
+		afterAmt,
+	)
+
 }

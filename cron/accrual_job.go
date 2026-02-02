@@ -51,7 +51,7 @@ func (j *AccrualJob) Stop() {
 
 func Decimal128ToInt(d primitive.Decimal128) int {
 	s := d.String()              // 例如 "3.0"
-	s = strings.Split(s, ".")[0] // 只取整数部分
+	s = strings.Split(s, ".")[0] // 取整数部分
 	i, err := strconv.Atoi(s)
 	if err != nil {
 		return 0
